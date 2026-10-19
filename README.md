@@ -23,6 +23,9 @@ On Windows PowerShell, use `npm.cmd` if the execution policy blocks `npm.ps1`.
 ```sh
 npm install
 cp .env.example .env
+npm run db:generate
+docker compose up -d postgres
+npm run db:deploy
 npm run dev:api
 npm run dev:web
 ```
@@ -41,3 +44,13 @@ npm run format:check
 Swagger is available at http://localhost:3000/api/docs and the process health check
 at http://localhost:3000/api/health. Database and API instructions will grow with
 each implemented feature.
+
+PostgreSQL runs only on loopback with a persistent Docker volume. Set
+`POSTGRES_PASSWORD` and the matching URL password in `.env` before starting it.
+Apply the tracked migrations with `npm run db:deploy`. For schema development use
+`npm exec --workspace @hooklens/api -- prisma migrate dev --name change_name`.
+`npm run db:generate` regenerates the ignored Prisma client after a fresh install.
+
+The schema includes cascading capture deletion, an expiry index, and a compound
+endpoint/time/ID index for deterministic newest-first history. Prisma 7 uses its
+PostgreSQL driver adapter and a bounded connection pool.

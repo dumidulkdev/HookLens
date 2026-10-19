@@ -1,0 +1,35 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model WebhookEndpoint {
+  id                  String            @id @default(uuid()) @db.Uuid
+  slug                String            @unique @db.VarChar(22)
+  managementTokenHash String            @db.Char(64)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  expiresAt           DateTime          @db.Timestamptz(3)
+  requests            CapturedRequest[]
+
+  @@index([expiresAt])
+}
+
+model CapturedRequest {
+  id          String          @id @default(uuid()) @db.Uuid
+  endpointId  String          @db.Uuid
+  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  method      String          @db.VarChar(7)
+  headers     Json
+  query       Json
+  body        Bytes
+  contentType String?
+  sourceIp    String?         @db.VarChar(45)
+  receivedAt  DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([endpointId, receivedAt(sort: Desc), id(sort: Desc)])
+}
