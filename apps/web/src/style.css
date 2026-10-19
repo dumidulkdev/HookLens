@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  background: #111214;
+  color: #e7e8ea;
+}
+body {
+  margin: 0;
+}
+main {
+  padding: 3rem;
+}

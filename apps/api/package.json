@@ -1,0 +1,49 @@
+{
+  "name": "@hooklens/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --watch --watch-path=src dev.cjs",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --max-warnings 0",
+    "format": "prettier --write src test prisma.config.ts",
+    "test": "jest --config jest.config.cjs --runInBand --passWithNoTests",
+    "test:e2e": "jest --config jest.e2e.config.cjs --runInBand",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.2.0",
+    "@nestjs/core": "12.2.0",
+    "@nestjs/platform-express": "12.2.0",
+    "@nestjs/platform-socket.io": "12.2.0",
+    "@nestjs/swagger": "12.0.2",
+    "@nestjs/websockets": "12.2.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "dotenv": "18.0.8",
+    "express": "5.3.0",
+    "pg": "8.23.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "socket.io": "4.8.4"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "12.2.0",
+    "@types/express": "5.0.6",
+    "@types/jest": "30.0.0",
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "@types/supertest": "7.2.1",
+    "jest": "30.5.2",
+    "prisma": "7.10.1",
+    "socket.io-client": "4.8.4",
+    "supertest": "7.3.1",
+    "ts-jest": "29.4.15"
+  }
+}

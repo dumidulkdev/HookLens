@@ -1,0 +1,35 @@
+{
+  "name": "hooklens",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "dev:api": "npm run dev --workspace @hooklens/api",
+    "dev:web": "npm run dev --workspace @hooklens/web",
+    "build": "npm run build --workspaces",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspace @hooklens/api",
+    "test:e2e": "npm run test:e2e --workspace @hooklens/api",
+    "db:generate": "npm run db:generate --workspace @hooklens/api",
+    "db:migrate": "npm run db:migrate --workspace @hooklens/api",
+    "db:deploy": "npm run db:deploy --workspace @hooklens/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2"
+  }
+}

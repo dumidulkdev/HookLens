@@ -15,4 +15,29 @@ authorized live events, dashboard, and final integration verification.
 Anonymous endpoints last 24 hours. Do not send production secrets. The management
 token grants access to captured data and belongs only in the current browser session.
 
-Setup and API documentation will be updated as each working feature is added.
+## Development setup
+
+Use Node.js 24.11+ (an active LTS release is recommended), npm 11+, and Docker Compose.
+On Windows PowerShell, use `npm.cmd` if the execution policy blocks `npm.ps1`.
+
+```sh
+npm install
+cp .env.example .env
+npm run dev:api
+npm run dev:web
+```
+
+The API listens on port 3000; Vite on 5173. API configuration is loaded from the
+repository root `.env` and validated on startup. Never commit `.env`.
+
+```sh
+npm run lint
+npm run typecheck
+npm run build
+npm test
+npm run format:check
+```
+
+Swagger is available at http://localhost:3000/api/docs and the process health check
+at http://localhost:3000/api/health. Database and API instructions will grow with
+each implemented feature.
