@@ -8,11 +8,13 @@ import { hashToken } from '../src/endpoints/token';
 import { EndpointsService } from '../src/endpoints/endpoints.service';
 import { RequestPageDto, RequestDetailDto } from '../src/captures/requests.dto';
 import { ExpirationService } from '../src/endpoints/expiration.service';
+import { io, Socket } from 'socket.io-client';
 
 describe('HookLens integration', () => {
   let app: NestExpressApplication;
   let prisma: PrismaService;
   const endpointIds: string[] = [];
+  const sockets: Socket[] = [];
 
   beforeAll(async () => {
     app = await createApp(false);
@@ -20,6 +22,7 @@ describe('HookLens integration', () => {
     prisma = app.get(PrismaService);
   });
   afterAll(async () => {
+    for (const socket of sockets) socket.disconnect();
     if (prisma) await prisma.webhookEndpoint.deleteMany({ where: { id: { in: endpointIds } } });
     if (app) await app.close();
   });
@@ -30,6 +33,97 @@ describe('HookLens integration', () => {
     endpointIds.push(endpoint.id);
     return endpoint;
   }
+
+  async function connectSocket(): Promise<Socket> {
+    const socket = io(`${await app.getUrl()}/inspector`, {
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+    });
+    sockets.push(socket);
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('connect_error', reject);
+    });
+    return socket;
+  }
+
+  async function subscribe(
+    socket: Socket,
+    endpointId: string,
+    managementToken: string,
+  ): Promise<{ ok: boolean }> {
+    return socket
+      .timeout(3000)
+      .emitWithAck('endpoint:subscribe', { endpointId, managementToken }) as Promise<{
+      ok: boolean;
+    }>;
+  }
+
+  it('authorizes subscriptions and sends captures, clears, and expiration only to the endpoint room', async () => {
+    const endpoint = await createEndpoint();
+    const other = await createEndpoint();
+    const owner = await connectSocket();
+    const outsider = await connectSocket();
+    const otherOwner = await connectSocket();
+    expect(await subscribe(outsider, endpoint.id, 'x'.repeat(43))).toMatchObject({ ok: false });
+    expect(await subscribe(owner, endpoint.id, endpoint.managementToken)).toEqual({ ok: true });
+    expect(await subscribe(otherOwner, other.id, other.managementToken)).toEqual({ ok: true });
+    const leaked: unknown[] = [];
+    outsider.on('request:received', (event: unknown) => leaked.push(event));
+    otherOwner.on('request:received', (event: unknown) => leaked.push(event));
+    const received = new Promise<unknown>((resolve) => owner.once('request:received', resolve));
+    await request(app.getHttpServer())
+      .post(new URL(endpoint.webhookUrl).pathname)
+      .send('private body')
+      .expect(200);
+    const event = await received;
+    expect(event).toMatchObject({ endpointId: endpoint.id, method: 'POST' });
+    expect(event).not.toHaveProperty('body');
+    const deleted = new Promise<unknown>((resolve) => owner.once('request:deleted', resolve));
+    await request(app.getHttpServer())
+      .delete(`/api/endpoints/${endpoint.id}/requests`)
+      .set('Authorization', `Bearer ${endpoint.managementToken}`)
+      .expect(200);
+    expect(await deleted).toMatchObject({ endpointId: endpoint.id, cleared: true });
+    const expired = new Promise<unknown>((resolve) => owner.once('endpoint:expired', resolve));
+    await prisma.webhookEndpoint.update({
+      where: { id: endpoint.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await app.get(ExpirationService).cleanupExpired();
+    expect(await expired).toEqual({ endpointId: endpoint.id, reason: 'expired' });
+    expect(await subscribe(outsider, endpoint.id, endpoint.managementToken)).toMatchObject({
+      ok: false,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(leaked).toEqual([]);
+    owner.disconnect();
+    outsider.disconnect();
+    otherOwner.disconnect();
+  });
+
+  it('rejects malformed subscriptions and untrusted browser origins', async () => {
+    const socket = await connectSocket();
+    const invalid = (await socket
+      .timeout(3000)
+      .emitWithAck('endpoint:subscribe', { endpointId: 'bad', managementToken: 'bad' })) as {
+      ok: boolean;
+    };
+    expect(invalid.ok).toBe(false);
+    socket.disconnect();
+    const rejected = io(`${await app.getUrl()}/inspector`, {
+      transports: ['websocket'],
+      reconnection: false,
+      extraHeaders: { Origin: 'https://untrusted.example' },
+    });
+    sockets.push(rejected);
+    await new Promise<void>((resolve, reject) => {
+      rejected.once('connect_error', () => resolve());
+      rejected.once('connect', () => reject(new Error('Untrusted origin connected')));
+    });
+    rejected.disconnect();
+  });
 
   it('clears history and deletes endpoints with cascading captures only with authorization', async () => {
     const endpoint = await createEndpoint();

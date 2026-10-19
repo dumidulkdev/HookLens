@@ -1,41 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '../generated/prisma/client';
+import { InspectorEvents } from '../common/inspector-events';
+import { SUMMARY_SELECT, toSummary } from './request-summary';
 import { readableBody } from './body-text';
-import {
-  HistoryQueryDto,
-  RequestDetailDto,
-  RequestPageDto,
-  RequestSummaryDto,
-} from './requests.dto';
-
-export const SUMMARY_SELECT = {
-  id: true,
-  endpointId: true,
-  method: true,
-  contentType: true,
-  receivedAt: true,
-  sourceIp: true,
-} as const;
-export function toSummary(
-  row: Prisma.CapturedRequestGetPayload<{ select: typeof SUMMARY_SELECT }>,
-): RequestSummaryDto {
-  return {
-    id: row.id,
-    endpointId: row.endpointId,
-    method: row.method,
-    contentType: row.contentType,
-    sourceIp: row.sourceIp,
-    receivedAt: row.receivedAt.toISOString(),
-  };
-}
+import { HistoryQueryDto, RequestDetailDto, RequestPageDto } from './requests.dto';
 
 @Injectable()
 export class RequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: InspectorEvents,
+  ) {}
 
   async clear(endpointId: string): Promise<{ deleted: number }> {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const [endpoint] = await tx.$queryRaw<
         Array<{ expiresAt: Date }>
       >`SELECT "expiresAt" FROM "WebhookEndpoint" WHERE "id" = ${endpointId}::uuid FOR UPDATE`;
@@ -44,6 +22,8 @@ export class RequestsService {
       const result = await tx.capturedRequest.deleteMany({ where: { endpointId } });
       return { deleted: result.count };
     });
+    this.events.emit('request:deleted', { endpointId, requestIds: [], cleared: true });
+    return result;
   }
 
   async history(endpointId: string, query: HistoryQueryDto): Promise<RequestPageDto> {

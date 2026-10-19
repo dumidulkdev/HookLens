@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { InspectorEvents } from '../common/inspector-events';
+import { SUMMARY_SELECT, toSummary } from './request-summary';
 
 export const CAPTURE_RETENTION = 100;
 
 @Injectable()
 export class CapturesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: InspectorEvents,
+  ) {}
 
   async capture(slug: string, request: Request): Promise<void> {
     if (!/^[A-Za-z0-9_-]{22}$/.test(slug)) throw new NotFoundException('Endpoint not found');
@@ -28,14 +33,14 @@ export class CapturesService {
     for (const [key, value] of Object.entries(request.headers)) {
       if (value !== undefined) Object.defineProperty(headers, key, { value, enumerable: true });
     }
-    await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Serialize insertion and pruning per endpoint. No network calls occur under this lock.
       const [endpoint] = await tx.$queryRaw<Array<{ id: string; expiresAt: Date }>>`
         SELECT "id", "expiresAt" FROM "WebhookEndpoint" WHERE "slug" = ${slug} FOR UPDATE
       `;
       if (!endpoint || endpoint.expiresAt.getTime() <= Date.now())
         throw new NotFoundException('Endpoint not found');
-      await tx.capturedRequest.create({
+      const captured = await tx.capturedRequest.create({
         data: {
           endpointId: endpoint.id,
           method: request.method,
@@ -45,6 +50,7 @@ export class CapturesService {
           contentType: request.headers['content-type'] ?? null,
           sourceIp: request.socket.remoteAddress ?? null,
         },
+        select: SUMMARY_SELECT,
       });
       const oldest = await tx.capturedRequest.findMany({
         where: { endpointId: endpoint.id },
@@ -56,6 +62,14 @@ export class CapturesService {
         await tx.capturedRequest.deleteMany({
           where: { id: { in: oldest.map((capture) => capture.id) } },
         });
+      return { summary: toSummary(captured), deletedIds: oldest.map((capture) => capture.id) };
     });
+    if (result.deletedIds.length)
+      this.events.emit('request:deleted', {
+        endpointId: result.summary.endpointId,
+        requestIds: result.deletedIds,
+        cleared: false,
+      });
+    this.events.emit('request:received', result.summary);
   }
 }

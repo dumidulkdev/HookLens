@@ -104,3 +104,19 @@ curl "$API_URL/api/endpoints/$ENDPOINT_ID/requests?method=POST&limit=50" -H "Aut
 `DELETE /api/endpoints/:id` deletes the endpoint and all captures, returning 204.
 Both require the management bearer token. Expired endpoints reject new deliveries
 immediately; a cleanup task removes expired endpoints and their captures every minute.
+
+## Real-time updates
+
+Connect Socket.IO over the `websocket` transport to namespace `/inspector`.
+Emit `endpoint:subscribe` with `{ endpointId, managementToken }` and await the
+acknowledgement `{ ok: true }` (or `{ ok: false, error }`). Tokens belong in the
+message body, never a connection URL. Re-subscribe after reconnection, then refresh
+REST history to recover events missed while disconnected.
+
+Only an authorized endpoint room receives `request:received` summaries,
+`request:deleted` (`{ endpointId, requestIds, cleared }`), and `endpoint:expired`
+(`{ endpointId, reason: "expired" | "deleted" }`). Events are emitted after database
+commit. Expiry or deletion removes subscribers from the room. WebSocket messages
+are limited to 4 KiB and subscription attempts to 30 per socket per minute.
+Browser origins must match `FRONTEND_ORIGIN`; command-line clients without Origin
+are supported but still need the management token.

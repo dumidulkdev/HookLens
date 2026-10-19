@@ -7,6 +7,7 @@ import { ApiExceptionFilter } from './common/exception.filter';
 import { APP_CONFIG, AppConfig } from './config';
 import { json } from 'express';
 import { captureRawBody } from './captures/raw-body.middleware';
+import { InspectorAdapter } from './inspector/inspector.adapter';
 
 export async function createApp(logging = true): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -14,6 +15,7 @@ export async function createApp(logging = true): Promise<NestExpressApplication>
     logger: logging ? ['log', 'warn', 'error'] : false,
   });
   const config = app.get<AppConfig>(APP_CONFIG);
+  app.useWebSocketAdapter(new InspectorAdapter(app, config.frontendOrigin));
   app.set('trust proxy', false);
   app.disable('x-powered-by');
   app.use('/h', captureRawBody);

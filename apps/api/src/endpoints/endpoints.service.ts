@@ -4,6 +4,7 @@ import { APP_CONFIG, AppConfig } from '../config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatedEndpointDto } from './endpoints.dto';
 import { hashToken, verifyToken } from './token';
+import { InspectorEvents } from '../common/inspector-events';
 
 export const ENDPOINT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -12,6 +13,7 @@ export class EndpointsService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly events: InspectorEvents,
   ) {}
 
   async create(): Promise<CreatedEndpointDto> {
@@ -45,5 +47,6 @@ export class EndpointsService {
       where: { id, expiresAt: { gt: new Date() } },
     });
     if (!result.count) throw new NotFoundException('Endpoint not found');
+    this.events.emit('endpoint:expired', { endpointId: id, reason: 'deleted' });
   }
 }

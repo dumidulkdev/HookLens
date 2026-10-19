@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
 import { CapturesModule } from './captures/captures.module';
+import { InspectorModule } from './inspector/inspector.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CapturesModule } from './captures/captures.module';
     HealthModule,
     EndpointsModule,
     CapturesModule,
+    InspectorModule,
   ],
 })
 export class AppModule {}
