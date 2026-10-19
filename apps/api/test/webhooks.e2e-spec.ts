@@ -52,6 +52,12 @@ describe('HookLens integration', () => {
     });
   }
 
+  it('reports ready only while PostgreSQL responds', async () => {
+    const result = await request(app.getHttpServer()).get('/api/health').expect(200);
+    expect(result.body).toMatchObject({ status: 'ok' });
+    expect(typeof result.body.timestamp).toBe('string');
+  });
+
   it('returns safe client errors for malformed management JSON and unexpected creation fields', async () => {
     const malformed = await request(app.getHttpServer())
       .post('/api/endpoints')

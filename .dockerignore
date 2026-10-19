@@ -1,0 +1,17 @@
+.git
+.local
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+dist
+**/dist
+build
+coverage
+.vite
+*.log
+*.tsbuildinfo
+apps/api/src/generated
+playwright-report
+test-results

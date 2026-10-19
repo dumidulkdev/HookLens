@@ -78,8 +78,8 @@ try {
   const { default: App } = await vite.ssrLoadModule('/src/App.tsx');
   root = createRoot(document.getElementById('root'));
   await act(async () => root.render(React.createElement(App)));
-  assert(document.body.textContent.includes('Generate webhook'));
-  await click('.page-heading .primary');
+  assert(document.body.textContent.includes('Generate endpoint'));
+  await click('.workspace-heading .primary');
   await waitFor(
     () => document.querySelector('.connection')?.textContent.includes('Live'),
     'authorized live connection',
@@ -138,11 +138,30 @@ try {
     () => document.querySelectorAll('.request-item').length === 2,
     'second live capture',
   );
+  const methodFilter = document.querySelector('#method-filter');
+  assert(methodFilter, 'Missing method filter');
+  await act(async () => {
+    methodFilter.value = 'PUT';
+    methodFilter.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  });
+  await waitFor(() => document.querySelectorAll('.request-item').length === 1, 'method filtering');
+  await act(async () => {
+    methodFilter.value = 'ALL';
+    methodFilter.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  });
+  await waitFor(() => document.querySelectorAll('.request-item').length === 2, 'reset method filter');
   await click('.request-item[aria-label^="PUT"]');
   await waitFor(
     () => document.querySelector('.detail-title .method')?.textContent === 'PUT',
     'binary selection',
   );
+  assert(document.querySelector('.inspector-grid').classList.contains('mobile-detail-open'));
+  await click('.mobile-back');
+  assert(!document.querySelector('.inspector-grid').classList.contains('mobile-detail-open'));
+  await click('.request-item[aria-label^="PUT"]');
+  assert(document.querySelector('.inspector-grid').classList.contains('mobile-detail-open'));
   await click('[role="tab"]:last-child');
   assert(document.querySelector('.body-code').textContent.includes('/wCA'));
   await click('[aria-label="Clear request history"]');
@@ -154,7 +173,7 @@ try {
   );
   assert(!document.querySelector('[role="alert"]'), 'No unexpected UI error');
   console.log(
-    'Dashboard integration passed: generation, live capture, inspection, inert HTML, binary Base64, session restoration, and clearing against PostgreSQL.',
+    'Dashboard integration passed: generation, live capture, inspection, method filtering, inert HTML, binary Base64, session restoration, and clearing against PostgreSQL.',
   );
 } finally {
   if (root) await act(async () => root.unmount());
