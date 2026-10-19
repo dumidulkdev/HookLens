@@ -70,3 +70,18 @@ For PostgreSQL integration tests, set `TEST_DATABASE_URL` to a separate database
 whose name ends in `_test`, then run `npm run test:e2e`. The runner deploys the
 tracked migrations there; it never resets a database. Tests delete only their
 own endpoints. Unit tests run with `npm test`.
+
+## Capture
+
+Send GET, POST, PUT, PATCH, or DELETE requests to the returned public URL.
+The API returns `200 { "received": true }` after a successful transaction.
+It preserves up to 256 KiB of raw bytes, including invalid JSON, binary, multipart,
+and content-encoded data. It stores headers, repeated query parameters, and the
+direct socket peer IP. Forwarded headers are captured as data, never trusted.
+Unknown or expired endpoints return 404; oversized uploads 413; rate limits 429.
+Capture is limited to 120 requests per direct source IP per minute. The latest
+100 captures are retained, with insertion and pruning serialized per endpoint.
+
+```sh
+curl -X POST "$WEBHOOK_URL?source=demo" -H 'Content-Type: application/json' --data-binary '{"event":"hello"}'
+```

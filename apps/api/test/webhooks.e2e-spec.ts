@@ -29,6 +29,79 @@ describe('HookLens integration', () => {
     return endpoint;
   }
 
+  it.each([
+    ['application/json', '{ "event": "created", "value": 1 }\n'],
+    ['text/plain', 'hello webhook\n'],
+    ['application/x-www-form-urlencoded', 'a=hello+world&a=two'],
+    ['application/json', '{malformed-json'],
+    ['application/octet-stream', Buffer.from([0, 255, 128, 13, 10])],
+  ])('captures exact bytes for %s', async (contentType, payload) => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    await request(app.getHttpServer())
+      .post(`${path}?tag=a&tag=b`)
+      .set('Content-Type', contentType)
+      .set('X-Forwarded-For', '203.0.113.10')
+      .send(payload)
+      .expect(200, { received: true });
+    const capture = await prisma.capturedRequest.findFirstOrThrow({
+      where: { endpointId: endpoint.id },
+    });
+    expect(Buffer.from(capture.body)).toEqual(
+      Buffer.isBuffer(payload) ? payload : Buffer.from(payload),
+    );
+    expect(capture.query).toEqual({ tag: ['a', 'b'] });
+    expect(capture.sourceIp).not.toBe('203.0.113.10');
+    expect(capture.contentType).toBe(contentType);
+  });
+
+  it('supports all five HTTP methods', async () => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    const server = request(app.getHttpServer());
+    for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+      await server[method](path).expect(200);
+    }
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(5);
+  });
+
+  it('rejects unknown and expired slugs', async () => {
+    await request(app.getHttpServer()).post('/h/unknown').expect(404);
+    const endpoint = await createEndpoint();
+    await prisma.webhookEndpoint.update({
+      where: { id: endpoint.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await request(app.getHttpServer()).post(new URL(endpoint.webhookUrl).pathname).expect(404);
+  });
+
+  it('accepts 256 KiB and rejects larger bodies without storing them', async () => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    await request(app.getHttpServer())
+      .post(path)
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.alloc(256 * 1024))
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(path)
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.alloc(256 * 1024 + 1))
+      .expect(413);
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(1);
+  });
+
+  it('retains at most 100 requests under concurrent deliveries', async () => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    for (let i = 0; i < 11; i++) {
+      await Promise.all(
+        Array.from({ length: 10 }, () => request(app.getHttpServer()).post(path).expect(200)),
+      );
+    }
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(100);
+  });
+
   it('creates independent random public slugs and management tokens, storing only the hash', async () => {
     const endpoint = await createEndpoint();
     expect(endpoint.webhookUrl.split('/').pop()).toMatch(/^[A-Za-z0-9_-]{22}$/);
