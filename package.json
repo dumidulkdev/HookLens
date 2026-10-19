@@ -19,7 +19,7 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm run test --workspace @hooklens/api",
-    "test:e2e": "npm run test:e2e --workspace @hooklens/api",
+    "test:e2e": "npm run build --workspace @hooklens/api && npm run test:e2e --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace @hooklens/api",
     "db:migrate": "npm run db:migrate --workspace @hooklens/api",
     "db:deploy": "npm run db:deploy --workspace @hooklens/api"

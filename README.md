@@ -120,3 +120,21 @@ commit. Expiry or deletion removes subscribers from the room. WebSocket messages
 are limited to 4 KiB and subscription attempts to 30 per socket per minute.
 Browser origins must match `FRONTEND_ORIGIN`; command-line clients without Origin
 are supported but still need the management token.
+
+## Dashboard
+
+Open http://localhost:5173, generate a webhook, and send a request to its URL.
+The dashboard updates through Socket.IO and refreshes authorized history after
+reconnection. Select a capture to inspect overview, headers, query parameters,
+formatted/raw text, or exact Base64 bytes. Filter by method, clear history, or
+delete the endpoint. Captured HTML is rendered only as escaped text.
+
+Only `sessionStorage` holds endpoint credentials. The token is never displayed,
+placed in URLs, or persisted to localStorage. New webhook generation replaces the
+current tab's saved endpoint; the previous endpoint expires on its normal schedule.
+GitHub is a placeholder link; replace it with the repository URL when publishing.
+
+`npm run test:e2e` runs PostgreSQL API tests and a React/jsdom integration check
+against a real temporary API server using the dedicated test database. The latter
+exercises generation, live updates, body inspection, inert captured HTML, binary
+Base64, session restoration, and history clearing. It does not verify visual layout.

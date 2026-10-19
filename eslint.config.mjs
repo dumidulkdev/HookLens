@@ -24,4 +24,18 @@ export default tseslint.config(
   },
   { files: ['**/*.ts', '**/*.tsx'], rules: { '@typescript-eslint/no-explicit-any': 'error' } },
   prettier,
+  {
+    files: ['apps/web/test/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        document: 'readonly',
+        sessionStorage: 'readonly',
+        setTimeout: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
 );
