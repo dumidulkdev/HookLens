@@ -31,6 +31,9 @@ export async function createApp(logging = true): Promise<NestExpressApplication>
   app.useGlobalFilters(new ApiExceptionFilter());
   const swaggerConfig = new DocumentBuilder()
     .setTitle('HookLens')
+    .setDescription(
+      'Temporary webhook inspection. Management routes require the endpoint bearer token returned once at creation. Public capture URLs never grant read access. Do not send production secrets.',
+    )
     .setVersion('1.0')
     .addBearerAuth(undefined, 'management')
     .build();

@@ -8,8 +8,10 @@ import {
   RequestPageDto,
 } from './requests.dto';
 import { RequestsService } from './requests.service';
+import { ApiErrorDto } from '../common/error.dto';
 
 @ApiTags('Request management')
+@ApiResponse({ status: 500, type: ApiErrorDto, description: 'Unexpected service error' })
 @ApiBearerAuth('management')
 @ApiResponse({ status: 400, description: 'Invalid ID or pagination/filter input' })
 @ApiResponse({ status: 401, description: 'Missing or invalid management token' })

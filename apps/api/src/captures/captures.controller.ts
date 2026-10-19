@@ -17,8 +17,15 @@ import { Request } from 'express';
 import { RateLimitGuard } from '../common/rate-limit.guard';
 import { CapturesService } from './captures.service';
 import { HTTP_METHODS } from './requests.dto';
+import { ApiErrorDto } from '../common/error.dto';
 
 @ApiTags('Public capture')
+@ApiResponse({
+  status: 405,
+  type: ApiErrorDto,
+  description: 'Unsupported method (HEAD is not captured)',
+})
+@ApiResponse({ status: 500, type: ApiErrorDto, description: 'Capture could not be persisted' })
 @ApiOkResponse({ schema: { example: { received: true } } })
 @ApiResponse({ status: 404, description: 'Unknown or expired endpoint' })
 @ApiResponse({ status: 413, description: 'Payload exceeds 256 KiB' })
@@ -36,18 +43,33 @@ export class CapturesController {
   }
 
   @Put(':slug')
+  @ApiBody({
+    required: false,
+    description: 'Uninterpreted wire bytes, up to 256 KiB',
+    schema: { type: 'string', format: 'binary' },
+  })
   @Header('Cache-Control', 'no-store')
   put(@Param('slug') slug: string, @Req() request: Request) {
     return this.store(slug, request);
   }
 
   @Patch(':slug')
+  @ApiBody({
+    required: false,
+    description: 'Uninterpreted wire bytes, up to 256 KiB',
+    schema: { type: 'string', format: 'binary' },
+  })
   @Header('Cache-Control', 'no-store')
   patch(@Param('slug') slug: string, @Req() request: Request) {
     return this.store(slug, request);
   }
 
   @Delete(':slug')
+  @ApiBody({
+    required: false,
+    description: 'Uninterpreted wire bytes, up to 256 KiB',
+    schema: { type: 'string', format: 'binary' },
+  })
   @Header('Cache-Control', 'no-store')
   delete(@Param('slug') slug: string, @Req() request: Request) {
     return this.store(slug, request);

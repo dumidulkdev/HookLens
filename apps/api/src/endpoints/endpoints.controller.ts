@@ -21,8 +21,20 @@ import { RateLimitGuard } from '../common/rate-limit.guard';
 import { CreatedEndpointDto } from './endpoints.dto';
 import { EndpointsService } from './endpoints.service';
 import { ManagementGuard } from './management.guard';
+import { ApiErrorDto } from '../common/error.dto';
 
 @ApiTags('Endpoints')
+@ApiResponse({
+  status: 400,
+  type: ApiErrorDto,
+  description: 'Invalid ID, malformed JSON, or unexpected input fields',
+})
+@ApiResponse({ status: 413, type: ApiErrorDto, description: 'Management JSON exceeds 16 KiB' })
+@ApiResponse({
+  status: 500,
+  type: ApiErrorDto,
+  description: 'Unexpected service error; no internal details are returned',
+})
 @Controller('api/endpoints')
 export class EndpointsController {
   constructor(private readonly endpoints: EndpointsService) {}
