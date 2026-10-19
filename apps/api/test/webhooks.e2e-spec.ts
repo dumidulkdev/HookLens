@@ -9,6 +9,7 @@ import { EndpointsService } from '../src/endpoints/endpoints.service';
 import { RequestPageDto, RequestDetailDto } from '../src/captures/requests.dto';
 import { ExpirationService } from '../src/endpoints/expiration.service';
 import { io, Socket } from 'socket.io-client';
+import { request as httpRequest } from 'node:http';
 
 describe('HookLens integration', () => {
   let app: NestExpressApplication;
@@ -33,6 +34,130 @@ describe('HookLens integration', () => {
     endpointIds.push(endpoint.id);
     return endpoint;
   }
+
+  async function sendRaw(
+    path: string,
+    chunks: Buffer[],
+    headers: Record<string, string>,
+  ): Promise<number> {
+    const url = `${await app.getUrl()}${path}`;
+    return new Promise<number>((resolve, reject) => {
+      const outgoing = httpRequest(url, { method: 'POST', headers }, (response) => {
+        response.resume();
+        response.on('end', () => resolve(response.statusCode ?? 0));
+      });
+      outgoing.on('error', reject);
+      for (const chunk of chunks) outgoing.write(chunk);
+      outgoing.end();
+    });
+  }
+
+  it('returns safe client errors for malformed management JSON and unexpected creation fields', async () => {
+    const malformed = await request(app.getHttpServer())
+      .post('/api/endpoints')
+      .set('Content-Type', 'application/json')
+      .send('{invalid')
+      .expect(400);
+    expect(malformed.body).toMatchObject({
+      statusCode: 400,
+      message: 'Malformed JSON request body',
+    });
+    expect(malformed.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(malformed.body)).not.toContain('{invalid');
+    await request(app.getHttpServer())
+      .post('/api/endpoints')
+      .send({ unexpected: true })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/api/endpoints')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ large: 'x'.repeat(17000) }))
+      .expect(413);
+    const endpoint = await createEndpoint();
+    await request(app.getHttpServer()).head(new URL(endpoint.webhookUrl).pathname).expect(405);
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(0);
+  });
+
+  it('enforces creation and capture rate limits and the configured CORS origin', async () => {
+    const previousCapture = process.env.CAPTURE_RATE_LIMIT;
+    const previousCreate = process.env.CREATE_RATE_LIMIT;
+    process.env.CAPTURE_RATE_LIMIT = '2';
+    process.env.CREATE_RATE_LIMIT = '2';
+    let limited: NestExpressApplication | undefined;
+    try {
+      limited = await createApp(false);
+      await limited.listen(0, '127.0.0.1');
+      const server = request(limited.getHttpServer());
+      const first = await server.post('/api/endpoints').expect(201);
+      const endpoint = first.body as CreatedEndpointDto;
+      endpointIds.push(endpoint.id);
+      const second = await server.post('/api/endpoints').expect(201);
+      endpointIds.push((second.body as CreatedEndpointDto).id);
+      await server.post('/api/endpoints').expect(429).expect('Retry-After', /\d+/);
+      const path = new URL(endpoint.webhookUrl).pathname;
+      await server
+        .post(path)
+        .set('Origin', process.env.FRONTEND_ORIGIN!)
+        .expect(200)
+        .expect('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN!);
+      const untrusted = await server
+        .post(path)
+        .set('Origin', 'https://untrusted.example')
+        .expect(200);
+      expect(untrusted.headers['access-control-allow-origin']).not.toBe(
+        'https://untrusted.example',
+      );
+      await server.post(path).set('X-Forwarded-For', '198.51.100.5').expect(429);
+      expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(2);
+    } finally {
+      if (limited) await limited.close();
+      process.env.CAPTURE_RATE_LIMIT = previousCapture;
+      process.env.CREATE_RATE_LIMIT = previousCreate;
+    }
+  });
+
+  it('preserves multipart, compressed, and chunked bytes without interpretation', async () => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    const multipart =
+      '--boundary\r\nContent-Disposition: form-data; name="hello"\r\n\r\nworld\r\n--boundary--\r\n';
+    await request(app.getHttpServer())
+      .post(path)
+      .set('Content-Type', 'multipart/form-data; boundary=boundary')
+      .send(multipart)
+      .expect(200);
+    const stored = await prisma.capturedRequest.findFirstOrThrow({
+      where: { endpointId: endpoint.id },
+    });
+    expect(Buffer.from(stored.body).toString()).toBe(multipart);
+    const { gzipSync } = await import('node:zlib');
+    const compressed = gzipSync(Buffer.from('{"event":"compressed"}'));
+    expect(
+      await sendRaw(path, [compressed], {
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip',
+      }),
+    ).toBe(200);
+    const encoded = await prisma.capturedRequest.findFirstOrThrow({
+      where: { endpointId: endpoint.id, headers: { path: ['content-encoding'], equals: 'gzip' } },
+    });
+    expect(Buffer.from(encoded.body)).toEqual(compressed);
+    const full = await request(app.getHttpServer())
+      .get(`/api/endpoints/${endpoint.id}/requests/${encoded.id}`)
+      .set('Authorization', `Bearer ${endpoint.managementToken}`)
+      .expect(200);
+    expect((full.body as RequestDetailDto).bodyText).toBeNull();
+    expect(
+      await sendRaw(path, [Buffer.from('chunked '), Buffer.from('bytes')], {
+        'Content-Type': 'text/plain',
+      }),
+    ).toBe(200);
+    expect(
+      await sendRaw(path, [Buffer.alloc(256 * 1024), Buffer.from('x')], {
+        'Content-Type': 'text/plain',
+      }),
+    ).toBe(413);
+  });
 
   async function connectSocket(): Promise<Socket> {
     const socket = io(`${await app.getUrl()}/inspector`, {

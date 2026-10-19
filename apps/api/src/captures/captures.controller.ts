@@ -10,11 +10,13 @@ import {
   Patch,
   Delete,
   UseGuards,
+  HttpException,
 } from '@nestjs/common';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { RateLimitGuard } from '../common/rate-limit.guard';
 import { CapturesService } from './captures.service';
+import { HTTP_METHODS } from './requests.dto';
 
 @ApiTags('Public capture')
 @ApiOkResponse({ schema: { example: { received: true } } })
@@ -65,6 +67,8 @@ export class CapturesController {
   }
 
   private async store(slug: string, request: Request): Promise<{ received: true }> {
+    if (!(HTTP_METHODS as readonly string[]).includes(request.method))
+      throw new HttpException('Unsupported capture method', 405);
     await this.captures.capture(slug, request);
     return { received: true };
   }

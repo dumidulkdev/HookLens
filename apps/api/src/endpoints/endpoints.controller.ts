@@ -1,4 +1,14 @@
-import { Controller, Delete, Header, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Header,
+  HttpCode,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -37,7 +47,12 @@ export class EndpointsController {
   })
   @ApiCreatedResponse({ type: CreatedEndpointDto })
   @ApiResponse({ status: 429, description: 'Creation rate limit exceeded' })
-  create(): Promise<CreatedEndpointDto> {
+  create(@Body() input: unknown): Promise<CreatedEndpointDto> {
+    if (
+      input !== undefined &&
+      (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length)
+    )
+      throw new BadRequestException('Endpoint creation does not accept input fields');
     return this.endpoints.create();
   }
 }

@@ -5,7 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/exception.filter';
 import { APP_CONFIG, AppConfig } from './config';
-import { json } from 'express';
+import { managementBody } from './common/management-body.middleware';
 import { captureRawBody } from './captures/raw-body.middleware';
 import { InspectorAdapter } from './inspector/inspector.adapter';
 
@@ -19,7 +19,7 @@ export async function createApp(logging = true): Promise<NestExpressApplication>
   app.set('trust proxy', false);
   app.disable('x-powered-by');
   app.use('/h', captureRawBody);
-  app.use('/api', json({ limit: '16kb' }));
+  app.use('/api', managementBody);
   app.enableCors({
     origin: config.frontendOrigin,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
