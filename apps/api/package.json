@@ -10,7 +10,7 @@
     "lint": "eslint src test --max-warnings 0",
     "format": "prettier --write src test prisma.config.ts",
     "test": "jest --config jest.config.cjs --runInBand --passWithNoTests",
-    "test:e2e": "jest --config jest.e2e.config.cjs --runInBand",
+    "test:e2e": "node scripts/run-e2e.cjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"

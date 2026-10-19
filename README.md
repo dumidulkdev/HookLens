@@ -54,3 +54,19 @@ Apply the tracked migrations with `npm run db:deploy`. For schema development us
 The schema includes cascading capture deletion, an expiry index, and a compound
 endpoint/time/ID index for deterministic newest-first history. Prisma 7 uses its
 PostgreSQL driver adapter and a bounded connection pool.
+
+## Endpoint creation
+
+`POST /api/endpoints` returns `{ id, webhookUrl, managementToken, expiresAt }`.
+The public URL contains a 128-bit random slug; its independent 256-bit management
+token is returned only once. Only its SHA-256 hash is persisted. Creation is
+limited to 10 requests per direct source IP per minute.
+
+```sh
+curl -X POST http://localhost:3000/api/endpoints
+```
+
+For PostgreSQL integration tests, set `TEST_DATABASE_URL` to a separate database
+whose name ends in `_test`, then run `npm run test:e2e`. The runner deploys the
+tracked migrations there; it never resets a database. Tests delete only their
+own endpoints. Unit tests run with `npm test`.
