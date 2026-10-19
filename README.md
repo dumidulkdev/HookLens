@@ -99,3 +99,8 @@ Compressed, binary, and undecodable bodies have `bodyText: null`.
 ```sh
 curl "$API_URL/api/endpoints/$ENDPOINT_ID/requests?method=POST&limit=50" -H "Authorization: Bearer $MANAGEMENT_TOKEN"
 ```
+
+`DELETE /api/endpoints/:id/requests` clears history and returns `{ deleted: number }`.
+`DELETE /api/endpoints/:id` deletes the endpoint and all captures, returning 204.
+Both require the management bearer token. Expired endpoints reject new deliveries
+immediately; a cleanup task removes expired endpoints and their captures every minute.

@@ -1,7 +1,12 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ManagementGuard } from '../endpoints/management.guard';
-import { HistoryQueryDto, RequestDetailDto, RequestPageDto } from './requests.dto';
+import {
+  DeletedRequestsDto,
+  HistoryQueryDto,
+  RequestDetailDto,
+  RequestPageDto,
+} from './requests.dto';
 import { RequestsService } from './requests.service';
 
 @ApiTags('Request management')
@@ -13,6 +18,13 @@ import { RequestsService } from './requests.service';
 @Controller('api/endpoints/:id/requests')
 export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
+
+  @Delete()
+  @ApiOperation({ summary: 'Clear the captured request history' })
+  @ApiOkResponse({ type: DeletedRequestsDto })
+  clear(@Param('id') id: string): Promise<DeletedRequestsDto> {
+    return this.requests.clear(id);
+  }
 
   @Get()
   @ApiOperation({ summary: 'List captured request summaries, newest first' })

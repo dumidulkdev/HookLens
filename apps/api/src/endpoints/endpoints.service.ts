@@ -39,4 +39,11 @@ export class EndpointsService {
     if (!endpoint || !matches) throw new UnauthorizedException('Invalid management credentials');
     if (endpoint.expiresAt.getTime() <= Date.now()) throw new NotFoundException('Endpoint expired');
   }
+
+  async remove(id: string): Promise<void> {
+    const result = await this.prisma.webhookEndpoint.deleteMany({
+      where: { id, expiresAt: { gt: new Date() } },
+    });
+    if (!result.count) throw new NotFoundException('Endpoint not found');
+  }
 }

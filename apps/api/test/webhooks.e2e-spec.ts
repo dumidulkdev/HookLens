@@ -7,6 +7,7 @@ import { CreatedEndpointDto } from '../src/endpoints/endpoints.dto';
 import { hashToken } from '../src/endpoints/token';
 import { EndpointsService } from '../src/endpoints/endpoints.service';
 import { RequestPageDto, RequestDetailDto } from '../src/captures/requests.dto';
+import { ExpirationService } from '../src/endpoints/expiration.service';
 
 describe('HookLens integration', () => {
   let app: NestExpressApplication;
@@ -29,6 +30,40 @@ describe('HookLens integration', () => {
     endpointIds.push(endpoint.id);
     return endpoint;
   }
+
+  it('clears history and deletes endpoints with cascading captures only with authorization', async () => {
+    const endpoint = await createEndpoint();
+    const root = `/api/endpoints/${endpoint.id}`;
+    const path = new URL(endpoint.webhookUrl).pathname;
+    const auth = `Bearer ${endpoint.managementToken}`;
+    await request(app.getHttpServer()).post(path).send('first').expect(200);
+    await request(app.getHttpServer()).delete(`${root}/requests`).expect(401);
+    await request(app.getHttpServer()).delete(root).expect(401);
+    await request(app.getHttpServer())
+      .delete(`${root}/requests`)
+      .set('Authorization', auth)
+      .expect(200, { deleted: 1 });
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(0);
+    await request(app.getHttpServer()).post(path).send('second').expect(200);
+    await request(app.getHttpServer()).delete(root).set('Authorization', auth).expect(204);
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(0);
+    await request(app.getHttpServer()).post(path).expect(404);
+  });
+
+  it('reclaims expired endpoints and their captures without touching active endpoints', async () => {
+    const endpoint = await createEndpoint();
+    const active = await createEndpoint();
+    await request(app.getHttpServer()).post(new URL(endpoint.webhookUrl).pathname).expect(200);
+    await prisma.webhookEndpoint.update({
+      where: { id: endpoint.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const deleted = await app.get(ExpirationService).cleanupExpired();
+    expect(deleted).toContain(endpoint.id);
+    expect(deleted).not.toContain(active.id);
+    expect(await prisma.webhookEndpoint.findUnique({ where: { id: endpoint.id } })).toBeNull();
+    expect(await prisma.capturedRequest.count({ where: { endpointId: endpoint.id } })).toBe(0);
+  });
 
   it('protects history and details, paginates, filters, and prevents cross-endpoint reads', async () => {
     const endpoint = await createEndpoint();

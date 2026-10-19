@@ -68,3 +68,7 @@ export class RequestPageDto {
   @ApiProperty({ example: 1 }) total!: number;
   @ApiProperty({ example: false }) hasMore!: boolean;
 }
+
+export class DeletedRequestsDto {
+  @ApiProperty({ example: 3 }) deleted!: number;
+}

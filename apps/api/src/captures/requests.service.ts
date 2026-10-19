@@ -34,6 +34,18 @@ export function toSummary(
 export class RequestsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async clear(endpointId: string): Promise<{ deleted: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const [endpoint] = await tx.$queryRaw<
+        Array<{ expiresAt: Date }>
+      >`SELECT "expiresAt" FROM "WebhookEndpoint" WHERE "id" = ${endpointId}::uuid FOR UPDATE`;
+      if (!endpoint || endpoint.expiresAt.getTime() <= Date.now())
+        throw new NotFoundException('Endpoint expired');
+      const result = await tx.capturedRequest.deleteMany({ where: { endpointId } });
+      return { deleted: result.count };
+    });
+  }
+
   async history(endpointId: string, query: HistoryQueryDto): Promise<RequestPageDto> {
     const where = { endpointId, method: query.method };
     const [rows, total] = await this.prisma.$transaction(
