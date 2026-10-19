@@ -6,6 +6,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { CreatedEndpointDto } from '../src/endpoints/endpoints.dto';
 import { hashToken } from '../src/endpoints/token';
 import { EndpointsService } from '../src/endpoints/endpoints.service';
+import { RequestPageDto, RequestDetailDto } from '../src/captures/requests.dto';
 
 describe('HookLens integration', () => {
   let app: NestExpressApplication;
@@ -28,6 +29,78 @@ describe('HookLens integration', () => {
     endpointIds.push(endpoint.id);
     return endpoint;
   }
+
+  it('protects history and details, paginates, filters, and prevents cross-endpoint reads', async () => {
+    const endpoint = await createEndpoint();
+    const path = new URL(endpoint.webhookUrl).pathname;
+    const history = `/api/endpoints/${endpoint.id}/requests`;
+    const auth = `Bearer ${endpoint.managementToken}`;
+    await request(app.getHttpServer())
+      .post(path)
+      .set('Content-Type', 'application/json')
+      .send('{ "hello": true }')
+      .expect(200);
+    await request(app.getHttpServer())
+      .put(path)
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.from([255, 0, 128]))
+      .expect(200);
+    await request(app.getHttpServer()).get(history).expect(401);
+    await request(app.getHttpServer())
+      .get(history)
+      .set('Authorization', `Bearer ${'x'.repeat(43)}`)
+      .expect(401);
+    const result = await request(app.getHttpServer())
+      .get(`${history}?limit=1`)
+      .set('Authorization', auth)
+      .expect(200);
+    const page = result.body as RequestPageDto;
+    expect(page.items).toHaveLength(1);
+    expect(page.total).toBe(2);
+    expect(page.hasMore).toBe(true);
+    expect(page.items[0]).not.toHaveProperty('body');
+    const second = await request(app.getHttpServer())
+      .get(`${history}?page=2&limit=1`)
+      .set('Authorization', auth)
+      .expect(200);
+    expect((second.body as RequestPageDto).items[0]?.id).not.toBe(page.items[0]?.id);
+    const filtered = await request(app.getHttpServer())
+      .get(`${history}?method=POST`)
+      .set('Authorization', auth)
+      .expect(200);
+    const post = (filtered.body as RequestPageDto).items[0]!;
+    const full = await request(app.getHttpServer())
+      .get(`${history}/${post.id}`)
+      .set('Authorization', auth)
+      .expect(200);
+    expect((full.body as RequestDetailDto).bodyText).toBe('{ "hello": true }');
+    expect(full.body).not.toHaveProperty('body');
+    expect(Buffer.from((full.body as RequestDetailDto).bodyBase64, 'base64').toString()).toBe(
+      '{ "hello": true }',
+    );
+    const binary = await request(app.getHttpServer())
+      .get(`${history}?method=PUT`)
+      .set('Authorization', auth)
+      .expect(200);
+    const binaryId = (binary.body as RequestPageDto).items[0]!.id;
+    const binaryFull = await request(app.getHttpServer())
+      .get(`${history}/${binaryId}`)
+      .set('Authorization', auth)
+      .expect(200);
+    expect((binaryFull.body as RequestDetailDto).bodyText).toBeNull();
+    const other = await createEndpoint();
+    await request(app.getHttpServer())
+      .get(`/api/endpoints/${other.id}/requests/${post.id}`)
+      .set('Authorization', `Bearer ${other.managementToken}`)
+      .expect(404);
+    await request(app.getHttpServer()).get(`${history}/${post.id}`).expect(401);
+    for (const query of ['limit=101', 'page=0', 'method=TRACE', 'unexpected=1']) {
+      await request(app.getHttpServer())
+        .get(`${history}?${query}`)
+        .set('Authorization', auth)
+        .expect(400);
+    }
+  });
 
   it.each([
     ['application/json', '{ "event": "created", "value": 1 }\n'],

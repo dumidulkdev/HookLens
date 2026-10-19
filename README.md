@@ -85,3 +85,17 @@ Capture is limited to 120 requests per direct source IP per minute. The latest
 ```sh
 curl -X POST "$WEBHOOK_URL?source=demo" -H 'Content-Type: application/json' --data-binary '{"event":"hello"}'
 ```
+
+## Inspect history
+
+Endpoint-specific APIs require `Authorization: Bearer <managementToken>`.
+`GET /api/endpoints/:id/requests` returns `{ items, page, limit, total, hasMore }`;
+defaults are page 1 and 50 summaries. `limit` is capped at 100; optional `method`
+accepts GET, POST, PUT, PATCH, or DELETE. Responses are marked `Cache-Control: no-store`.
+`GET /api/endpoints/:id/requests/:requestId` returns full details with `bodyBase64`,
+`bodySize`, and a supplementary `bodyText` for suitable UTF-8 textual MIME types.
+Compressed, binary, and undecodable bodies have `bodyText: null`.
+
+```sh
+curl "$API_URL/api/endpoints/$ENDPOINT_ID/requests?method=POST&limit=50" -H "Authorization: Bearer $MANAGEMENT_TOKEN"
+```
